@@ -4,7 +4,7 @@ using namespace std;
 
 int main()
 {
-    cout << "Bienvenidos al Desafio 2" << endl;
+    cout << "Bienvenidos al Desafio 1" << endl;
     cout << "Compresion y decodificacion de texto" << endl;
     int opcion=1;
 
@@ -13,7 +13,8 @@ int main()
         cout<<"Seleccione una opcion"<<endl;
         cout<<"1- Encriptar"<<endl;
         cout<<"2- Desencriptar"<<endl;
-        cout<<"3- Problema 3"<<endl;
+        cout<<"3- Comprimir"<<endl;
+        cout<<"4-Descomprimir"<<endl;
         cout<<"0- para salir"<<endl;
         cin>>opcion;
         switch (opcion) {
@@ -24,6 +25,12 @@ int main()
         break;
 
         case 2:{
+
+
+        }
+        break;
+
+        case 3:{
 
 
         }
