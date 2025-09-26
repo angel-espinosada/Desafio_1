@@ -6,13 +6,20 @@ void copiar_cadena(char* destino, char* origen);
 int longitud_cadena(char* s);
 void convertir_num_atexto(int numero, char resultado[]);
 void compresion_rle(char texto[], char *&resultado, int &tamano );
-void descompresion_rle(char *resultado, int tamano, char *&texto);
+void descompresion_rle(unsigned char *resultado, int tamano, char *&texto);
 void compresion_lz78(char texto[], unsigned char* &resultado, int &tamano);
 char* descompresion_lz78(unsigned char* datos, int tamano);
 char* leer_archivo(char* nombreArchivo);
 unsigned char rotacion_dere (unsigned char bite, int n);
 unsigned char rotacion_izqui(unsigned char bite, int n);
 char* desencriptar(char* datos, int len, int n, unsigned char K);
+char* encriptar_xor(char* datos, int len, unsigned char K);
+char* desencriptar_xor(char* datos, int len, unsigned char K);
+void guardar_archivo(const char* nombreArchivo, char* datos, int len);
+char* aplicar_xor(char* datos, int len, unsigned char K);
+char* desencriptar_bin(char* datos, int len, int n, unsigned char K);
+bool contiene(char* texto, char* fragmento);
+char* leer_archivo_bn(const char* nombreArchivo, int& longitud);
 int main()
 {
     cout << "Bienvenidos al Desafio 1" << endl;
@@ -30,6 +37,8 @@ int main()
         cout<<"6-Leyendoo texto "<<endl;
         cout<<"7-descomprimir lz78 "<<endl;
         cout<<"8_totaciones"<<endl;
+        cout<<"9_xor"<<endl;
+        cout<<"10_xor"<<endl;
         cout<<"0- para salir"<<endl;
         cin>>opcion;
         switch (opcion) {
@@ -83,7 +92,7 @@ int main()
                 }
                 cout << endl;
 
-                descompresion_rle(resultado, tamano, recuperado);
+                descompresion_rle((unsigned char*)resultado, tamano, recuperado);
 
                 cout << "Texto recuperado: " << recuperado << endl;
 
@@ -280,8 +289,137 @@ int main()
                 delete[] desencriptado;
             }
             break;
+            case 9: {
+                char texto[] = "HOLA MUNDO";
+                int len = 10;                 // longitud del texto
+                unsigned char K = 0x5A;       // clave XOR
 
+                char* encriptado = encriptar_xor(texto, len, K);
 
+                cout << "Texto original: " << texto << endl;
+                cout << "Encriptado (hex): ";
+                for (int i = 0; i < len; i++) {
+                    printf("%02X ", (unsigned char)encriptado[i]);
+                }
+                cout << endl;
+
+                char* desencriptado = desencriptar_xor(encriptado, len, K);
+                cout << "Desencriptado: " << desencriptado << endl;
+
+                delete[] encriptado;
+                delete[] desencriptado;
+            }
+            break;
+
+            case 10: {
+                char nombreIn[] = "entrada.txt";   // archivo de entrada
+                char nombreEnc[] = "encriptado.txt"; // salida encriptada
+                char nombreDec[] = "desencriptado.txt"; // salida desencriptada
+
+                // leer archivo
+                char* texto = leer_archivo(nombreIn);
+                if (texto == nullptr) break;
+
+                int len = longitud_cadena(texto);
+                unsigned char K = 0x5A; // clave XOR
+
+                cout << "Texto original:" << endl;
+                cout << texto << endl;
+
+                // encriptar
+                char* encriptado = aplicar_xor(texto, len, K);
+                guardar_archivo(nombreEnc, encriptado, len);
+
+                cout << "Archivo encriptado guardado en: " << nombreEnc << endl;
+
+                // desencriptar
+                char* desencriptado = aplicar_xor(encriptado, len, K);
+                guardar_archivo(nombreDec, desencriptado, len);
+
+                cout << "Archivo desencriptado guardado en: " << nombreDec << endl;
+
+                delete[] texto;
+                delete[] encriptado;
+                delete[] desencriptado;
+            }
+            break;
+            case 11: {
+                char nombreEnc[50], nombrePista[50];
+                cout << "Ingrese el nombre del archivo encriptado (ej: Encriptado1.txt): ";
+                cin >> nombreEnc;
+                cout << "Ingrese el nombre del archivo de pista (ej: pista1.txt): ";
+                cin >> nombrePista;
+
+                // Leer archivos
+                int len_enc, len_pista;
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc); // ← debe devolver longitud
+                char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+                if (!encriptado || !pista_bruta) {
+                    cout << "Error al leer archivos." << endl;
+                    break;
+                }
+
+                // Limpiar pista (eliminar '\n' si existe)
+                char* pista = pista_bruta;
+                if (len_pista > 0 && pista[len_pista - 1] == '\n') {
+                    pista[len_pista - 1] = '\0';
+                } else {
+                    pista[len_pista] = '\0';
+                }
+
+                cout << "Buscando... (pista: [" << pista << "])" << endl;
+
+                bool encontrado = false;
+                for (int n = 1; n <= 7 && !encontrado; n++) {
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+                        // Desencriptar
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                        // Validar: longitud debe ser múltiplo de 3
+                        if (len_enc % 3 != 0) {
+                            delete[] desencriptado;
+                            continue;
+                        }
+
+                        // Probar RLE
+                        char* original_rle = nullptr;
+                        descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
+                        if (original_rle && contiene(original_rle, pista)) {
+                            cout << "\n✅ ENCONTRADO con RLE" << endl;
+                            cout << "n = " << n << ", K = 0x" << hex << K << dec << endl;
+                            cout << "Mensaje original:\n" << original_rle << endl;
+                            encontrado = true;
+                            delete[] original_rle;
+                        } else if (original_rle) {
+                            delete[] original_rle;
+                        }
+
+                        // Probar LZ78 (solo si RLE no funcionó)
+                        if (!encontrado) {
+                            char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+                            if (original_lz && contiene(original_lz, pista)) {
+                                cout << "\n✅ ENCONTRADO con LZ78" << endl;
+                                cout << "n = " << n << ", K = 0x" << hex << K << dec << endl;
+                                cout << "Mensaje original:\n" << original_lz << endl;
+                                encontrado = true;
+                                delete[] original_lz;
+                            } else if (original_lz) {
+                                delete[] original_lz;
+                            }
+                        }
+
+                        delete[] desencriptado;
+                    }
+                }
+
+                if (!encontrado) {
+                    cout << "❌ No se encontró ninguna combinación válida." << endl;
+                }
+
+                delete[] encriptado;
+                delete[] pista_bruta;
+                break;
+            }
         default:
     {
 
@@ -351,7 +489,7 @@ void compresion_rle(char texto[], char *&resultado, int &tamano ){
     tamano = contado_resul;
 }
 
-void descompresion_rle(char *resultado, int tamano, char *&texto) {
+void descompresion_rle(unsigned char *resultado, int tamano, char *&texto) {
     int contado_texto = 0;
 
     texto = new char[1000];
@@ -441,6 +579,7 @@ void compresion_lz78(char texto[], unsigned char* &resultado, int &tamano) {
 
 
 // Leer archivo completo a memoria
+
 char* leer_archivo(char* nombreArchivo) {
     FILE* archivo = fopen(nombreArchivo, "rb"); // abrir en modo binario
     if (!archivo) {
@@ -466,6 +605,26 @@ char* leer_archivo(char* nombreArchivo) {
     return buffer; // devolvemos puntero
 }
 
+char* leer_archivo_bn(const char* nombreArchivo, int& longitud) {
+    FILE* archivo = fopen(nombreArchivo, "rb");
+    if (!archivo) {
+        cout << "Error: el archivo '" << nombreArchivo << "' no existe." << endl;
+        longitud = 0;
+        return nullptr;
+    }
+
+    fseek(archivo, 0, SEEK_END);
+    long tamano = ftell(archivo);
+    rewind(archivo);
+
+    char* buffer = new char[tamano]; // ← SIN +1, SIN '\0'
+
+    size_t leidos = fread(buffer, 1, tamano, archivo);
+    fclose(archivo);
+
+    longitud = (int)leidos; // ← DEVUELVES LA LONGITUD REAL
+    return buffer;
+}
 
 // Versión de strlen
 int longitud_cadena( char* s) {
@@ -565,11 +724,89 @@ unsigned char rotacion_izqui(unsigned char bite, int n) {
 
 
 char* desencriptar(char* datos, int len, int n, unsigned char K) {
-    char* salida = new char[len];
+    char* salida = new char[len+1];
     for (int i = 0; i < len; i++) {
         unsigned char b = (unsigned char)datos[i];
         b = b ^ K;                 // XOR con clave
         b = rotacion_dere(b, n);    // rotación derecha n bits
+        salida[i] = (char)b;
+    }
+    salida[len] = '\0';
+    return salida;
+}
+
+
+char* encriptar_xor(char* datos, int len, unsigned char K) {
+    char* salida = new char[len + 1]; // +1 para '\0'
+    for (int i = 0; i < len; i++) {
+        unsigned char b = (unsigned char)datos[i];
+        b = b ^ K;         // XOR con la clave
+        salida[i] = (char)b;
+    }
+    salida[len] = '\0';    // terminador
+    return salida;
+}
+
+char* desencriptar_xor(char* datos, int len, unsigned char K) {
+    char* salida = new char[len + 1]; // +1 para '\0'
+    for (int i = 0; i < len; i++) {
+        unsigned char b = (unsigned char)datos[i];
+        b = b ^ K;         // XOR con la misma clave
+        salida[i] = (char)b;
+    }
+    salida[len] = '\0';    // terminador
+    return salida;
+}
+
+
+void guardar_archivo(const char* nombreArchivo, char* datos, int len) {
+    FILE* archivo = fopen(nombreArchivo, "wb");
+    if (!archivo) {
+        cout << "Error: no se pudo abrir el archivo para escribir." << endl;
+        return;
+    }
+    fwrite(datos, 1, len, archivo);
+    fclose(archivo);
+}
+
+char* aplicar_xor(char* datos, int len, unsigned char K) {
+    char* salida = new char[len + 1]; // +1 para '\0'
+    for (int i = 0; i < len; i++) {
+        unsigned char b = (unsigned char)datos[i];
+        b = b ^ K;        // aplicar XOR con la clave
+        salida[i] = (char)b;
+    }
+    salida[len] = '\0';   // terminador
+    return salida;
+}
+
+bool contiene(char* texto, char* fragmento) {
+    if (texto == nullptr || fragmento == nullptr) return false;
+    int len_texto = 0, len_frag = 0;
+    while (texto[len_texto] != '\0') len_texto++;
+    while (fragmento[len_frag] != '\0') len_frag++;
+    if (len_frag == 0) return true;
+    if (len_frag > len_texto) return false;
+
+    for (int i = 0; i <= len_texto - len_frag; i++) {
+        bool coincide = true;
+        for (int j = 0; j < len_frag; j++) {
+            if (texto[i + j] != fragmento[j]) {
+                coincide = false;
+                break;
+            }
+        }
+        if (coincide) return true;
+    }
+    return false;
+}
+
+char* desencriptar_bin(char* datos, int len, int n, unsigned char K) {
+    char* salida = new char[len];
+    for (int i = 0; i < len; i++) {
+        unsigned char b = (unsigned char)datos[i];
+        b = b ^ K;
+        b = ((b >> n) | (b << (8 - n))); // rotación derecha
         salida[i] = (char)b;
     }
     return salida;
