@@ -10,6 +10,9 @@ void descompresion_rle(char *resultado, int tamano, char *&texto);
 void compresion_lz78(char texto[], unsigned char* &resultado, int &tamano);
 char* descompresion_lz78(unsigned char* datos, int tamano);
 char* leer_archivo(char* nombreArchivo);
+unsigned char rotacion_dere (unsigned char bite, int n);
+unsigned char rotacion_izqui(unsigned char bite, int n);
+char* desencriptar(char* datos, int len, int n, unsigned char K);
 int main()
 {
     cout << "Bienvenidos al Desafio 1" << endl;
@@ -26,6 +29,7 @@ int main()
         cout<<"5-comprimir lz78 "<<endl;
         cout<<"6-Leyendoo texto "<<endl;
         cout<<"7-descomprimir lz78 "<<endl;
+        cout<<"8_totaciones"<<endl;
         cout<<"0- para salir"<<endl;
         cin>>opcion;
         switch (opcion) {
@@ -149,13 +153,13 @@ int main()
                         }
                     }
                     if (igual) {
-                        cout << "✅ ¡Funciona!" << endl;
+                        cout << "¡Funciona!" << endl;
                     } else {
-                        cout << "❌ No coincide." << endl;
+                        cout << " No coincide." << endl;
                     }
                     delete[] resultado;
                 } else {
-                    cout << "❌ Descompresión falló." << endl;
+                    cout << "Descompresión falló." << endl;
                 }
 
                 delete[] texto;
@@ -242,17 +246,52 @@ int main()
                 // Liberar memoria
                 delete[] texto_original;
                 delete[] datos_comprimidos;
-                break;
             }
-        default:{
+                break;
+
+            case 8: {
+                char texto[] = "HOLA";   // Texto de prueba
+                int len = 4;             // Longitud
+                int n = 2;               // Rotar 2 bits
+                unsigned char K = 0x5A;  // Clave XOR
+
+                // Primero encriptamos manualmente (XOR + rot izq)
+                char* encriptado = new char[len];
+                for (int i = 0; i < len; i++) {
+                    unsigned char b = (unsigned char)texto[i];
+                    b = rotacion_izqui(b, n); // rotación izquierda para encriptar
+                    b = b ^ K;                // XOR con clave
+                    encriptado[i] = (char)b;
+                }
+
+                cout << "Texto original: " << texto << endl;
+                cout << "Encriptado (hex): ";
+                for (int i = 0; i < len; i++) {
+                    printf("%02X ", (unsigned char)encriptado[i]);
+                }
+                cout << endl;
+
+                // Ahora desencriptamos con tu función
+                char* desencriptado = desencriptar(encriptado, len, n, K);
+
+                cout << "Desencriptado: " << desencriptado << endl;
+
+                delete[] encriptado;
+                delete[] desencriptado;
+            }
+            break;
+
+
+        default:
+    {
 
             if(opcion!=0)
                 cout<<"opcion no valida"<<endl;
             break;
         }
         }
-    }
 
+    }
      system("pause");
 
     return 0;
@@ -357,7 +396,7 @@ void compresion_lz78(char texto[], unsigned char* &resultado, int &tamano) {
             while (m < l && texto[i + m] == dict[k][m]) m++;
             if (m == l) {
                 best_len = l;
-                best_k = k;  // 🔹 Guardar el índice correcto
+                best_k = k;
             }
 
         }
@@ -511,3 +550,27 @@ char* descompresion_lz78(unsigned char* datos, int tamano) {
     return texto;
 }
 
+//metodos de encriptacion
+
+unsigned char rotacion_dere (unsigned char bite, int n) {
+    n = n % 8;
+    return (bite >> n) | (bite << (8 - n));
+}
+
+
+unsigned char rotacion_izqui(unsigned char bite, int n) {
+    n = n % 8;
+    return (bite << n) | (bite >> (8 - n));
+}
+
+
+char* desencriptar(char* datos, int len, int n, unsigned char K) {
+    char* salida = new char[len];
+    for (int i = 0; i < len; i++) {
+        unsigned char b = (unsigned char)datos[i];
+        b = b ^ K;                 // XOR con clave
+        b = rotacion_dere(b, n);    // rotación derecha n bits
+        salida[i] = (char)b;
+    }
+    return salida;
+}
