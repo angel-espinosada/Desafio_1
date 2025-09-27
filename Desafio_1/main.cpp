@@ -20,14 +20,237 @@ char* aplicar_xor(char* datos, int len, unsigned char K);
 char* desencriptar_bin(char* datos, int len, int n, unsigned char K);
 bool contiene(char* texto, char* fragmento);
 char* leer_archivo_bn(const char* nombreArchivo, int& longitud);
-int main()
-{
+bool buscar_lz78_limpio(const char* nombreEnc, const char* nombrePista);
+
+int main() {
+    int opcion=1;
+    while(opcion!=0){
     cout << "Bienvenidos al Desafio 1" << endl;
     cout << "Compresion y decodificacion de texto" << endl;
-    int opcion=1;
 
-    while(opcion!=0)
+    cout<<"Seleccione una opcion"<<endl;
+    cout<<"1- Descomprimir y desencriptar de forma automatica"<<endl;
+    cout<<"2- Manual, pista y archivo encriptado"<<endl;
+    cout<<"0-Ingrese 0, para salir."<<endl;
+    cin>>opcion;
+    switch (opcion) {
+    case 1:{
+        int n;
+        cout << "Ingrese el numero de casos a evaluar: ";
+        cin >> n;
+
+        for (int i = 1; i <= n; i++) {
+            char nombreEnc[50], nombrePista[50];
+            sprintf(nombreEnc, "Encriptado%d.txt", i);
+            sprintf(nombrePista, "pista%d.txt", i);
+
+            cout << "\n=== Procesando caso " << i << " ===" << endl;
+
+            // Leer archivos
+            int len_enc = 0, len_pista = 0;
+            char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+            char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+            if (!encriptado || !pista_bruta) {
+                cout << "Error: no se pudieron leer los archivos del caso " << i << endl;
+                continue;
+            }
+
+            // Limpiar pista
+            char* pista = new char[len_pista + 1];
+            int pista_len = 0;
+            for (int j = 0; j < len_pista; j++) {
+                if (pista_bruta[j] != '\n' && pista_bruta[j] != '\r') {
+                    pista[pista_len++] = pista_bruta[j];
+                }
+            }
+            pista[pista_len] = '\0';
+
+            // Intentar RLE
+            bool encontrado = false;
+            for (int n_rot = 1; n_rot <= 7 && !encontrado; n_rot++) {
+                for (int K = 0; K <= 255 && !encontrado; K++) {
+                    char* desencriptado = desencriptar_bin(encriptado, len_enc, n_rot, (unsigned char)K);
+                    if (len_enc % 3 != 0) {
+                        delete[] desencriptado;
+                        continue;
+                    }
+
+                    char* original = nullptr;
+                    descompresion_rle((unsigned char*)desencriptado, len_enc, original);
+                    if (original && contiene(original, pista)) {
+                        cout << "Método: RLE" << endl;
+                        cout << "Rotación: " << n_rot << " bits" << endl;
+                        cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                        cout << "Mensaje original:\n" << original << endl;
+                        encontrado = true;
+                    }
+                    delete[] original;
+                    delete[] desencriptado;
+                }
+            }
+
+            // Si no se encontró, intentar LZ78
+            if (!encontrado) {
+                for (int n_rot = 1; n_rot <= 7 && !encontrado; n_rot++) {
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n_rot, (unsigned char)K);
+                        if (len_enc % 3 != 0) {
+                            delete[] desencriptado;
+                            continue;
+                        }
+
+                        char* original = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+                        if (original && contiene(original, pista)) {
+                            cout << "Método: LZ78" << endl;
+                            cout << "Rotación: " << n_rot << " bits" << endl;
+                            cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                            cout << "Mensaje original:\n" << original << endl;
+                            encontrado = true;
+                        }
+                        delete[] original;
+                        delete[] desencriptado;
+                    }
+                }
+            }
+
+            if (!encontrado) {
+                cout << "❌ No se pudo resolver el caso " << i << endl;
+            }
+
+            // Liberar memoria
+            delete[] encriptado;
+            delete[] pista_bruta;
+            delete[] pista;
+        }
+
+    }
+    break;
+
+    case 2:{
+
+        char nombreEnc[50], nombrePista[50];
+        cout << "Ingrese el nombre del archivo encriptado (ej: Encriptado1.txt): ";
+        cin >> nombreEnc;
+        cout << "Ingrese el nombre del archivo de pista (ej: pista1.txt): ";
+        cin >> nombrePista;
+
+        bool encontrado = false;
+
+        // ===============================
+        // INTENTAR CON RLE PRIMERO
+        // ===============================
+        cout << "\n=== Intentando con RLE ===" << endl;
+
+        int len_enc = 0, len_pista = 0;
+        char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+        char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+        if (!encriptado || !pista_bruta) {
+            cout << "Error al leer archivos." << endl;
+            if (encriptado) delete[] encriptado;
+            if (pista_bruta) delete[] pista_bruta;
+            break;
+        }
+
+        // Limpiar pista
+        char* pista = new char[len_pista + 1];
+        int pista_len = 0;
+        for (int i = 0; i < len_pista; i++) {
+            if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                pista[pista_len++] = pista_bruta[i];
+            }
+        }
+        pista[pista_len] = '\0';
+
+        cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+        cout << "Pista: [" << pista << "]" << endl;
+
+        // Buscar con RLE
+        for (int n = 1; n <= 7 && !encontrado; n++) {
+            for (int K = 0; K <= 255 && !encontrado; K++) {
+                char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                if (len_enc % 2 != 0) {
+                    delete[] desencriptado;
+                    continue;
+                }
+
+                char* original_rle = nullptr;
+                descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
+
+                if (original_rle && contiene(original_rle, pista)) {
+                    // Verificar recompresión
+                    char* recomp = nullptr;
+                    int tam_recomp = 0;
+                    compresion_rle(original_rle, recomp, tam_recomp);
+
+                    bool igual_bytes = false;
+                    if (recomp && tam_recomp == len_enc) {
+                        igual_bytes = true;
+                        for (int b = 0; b < tam_recomp; b++) {
+                            if ((unsigned char)recomp[b] != (unsigned char)desencriptado[b]) {
+                                igual_bytes = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (recomp) delete[] recomp;
+
+                    if (igual_bytes) {
+                        cout << "\n✅ ENCONTRADO con RLE" << endl;
+                        cout << "Rotación: " << n << " bits" << endl;
+                        cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                        cout << "Texto original (primeros 500 chars):" << endl;
+                        for (int i = 0; i < 500 && original_rle[i] != '\0'; i++) cout << original_rle[i];
+                        cout << endl;
+                        encontrado = true;
+                    }
+                }
+
+                if (original_rle) delete[] original_rle;
+                delete[] desencriptado;
+            }
+        }
+
+        // Limpiar memoria de RLE
+        delete[] encriptado;
+        delete[] pista_bruta;
+        delete[] pista;
+
+        // ===============================
+        // SI RLE NO FUNCIONA, LLAMAR FUNCIÓN LZ78 LIMPIA
+        // ===============================
+        if (!encontrado) {
+            cout << "\n--- RLE no funcionó, intentando LZ78 desde cero ---" << endl;
+            encontrado = buscar_lz78_limpio(nombreEnc, nombrePista);
+        }
+
+        if (!encontrado) {
+            cout << "\n❌ No se encontró ninguna combinación (RLE o LZ78)." << endl;
+        }
+
+        break;
+    }
+    break;
+
+    default:
     {
+
+
+        if(opcion!=0)
+            cout<<"opcion no valida"<<endl;
+        break;
+    }
+    }
+
+    }
+
+    system("pause");
+    return 0;
+}
+        /*
         cout<<"Seleccione una opcion"<<endl;
         cout<<"1- Encriptar"<<endl;
         cout<<"2- Desencriptar"<<endl;
@@ -41,6 +264,8 @@ int main()
         cout<<"10_xor"<<endl;
         cout<<"13 prueba RLE"<<endl;
         cout<<"14 prueba lz78"<<endl;
+        cout<<"17 prueba lz78"<<endl;
+        cout<<"18 por qen prueba lz78"<<endl;
         cout<<"0- para salir"<<endl;
 
         cin>>opcion;
@@ -353,8 +578,8 @@ int main()
                 cout << "Ingrese el nombre del archivo de pista (ej: pista1.txt): ";
                 cin >> nombrePista;
 
-                // Leer archivos
-                int len_enc, len_pista;
+                // Leer archivos (binario)
+                int len_enc = 0, len_pista = 0;
                 char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
                 char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
 
@@ -365,7 +590,7 @@ int main()
                     break;
                 }
 
-                // Limpiar pista
+                // Limpiar pista (eliminar \r \n)
                 char* pista = new char[len_pista + 1];
                 int pista_len = 0;
                 for (int i = 0; i < len_pista; i++) {
@@ -378,103 +603,139 @@ int main()
                 cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
                 cout << "Pista: [" << pista << "]" << endl;
 
-                // VALIDACIÓN: debe ser múltiplo de 3
-                if (len_enc % 3 != 0) {
-                    cout << "ERROR: Archivo no es múltiplo de 3, no puede ser RLE/LZ78" << endl;
-                    delete[] encriptado;
-                    delete[] pista_bruta;
-                    delete[] pista;
-                    break;
-                }
-
-                cout << "Buscando combinación correcta..." << endl;
                 bool encontrado = false;
 
-                // Buscar combinación correcta
+                // ===============================
+                // 1) Intentar con RLE (todas las combinaciones)
+                // ===============================
+                cout << "\n=== Intentando con RLE ===" << endl;
                 for (int n = 1; n <= 7 && !encontrado; n++) {
-                    cout << "Probando rotación " << n << "..." << endl;
-
                     for (int K = 0; K <= 255 && !encontrado; K++) {
-                        if (K % 50 == 0) {
-                            cout << "  Clave " << K << "/255" << endl;
+
+                        // Desencriptar (binario) usando tu función (longitud permanece len_enc)
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                        // Validar formato RLE: longitud debe ser múltiplo de 3
+                        if (len_enc % 3 != 0) {
+                            delete[] desencriptado;
+                            continue;
                         }
 
-                        try {
-                            // Desencriptar
-                            cout << "    Desencriptando con n=" << n << ", K=0x" << hex << K << dec << "..." << endl;
-                            char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+                        // Intentar descomprimir RLE
+                        char* original_rle = nullptr;
+                        descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
 
-                            // Probar RLE
-                            cout << "    Probando RLE..." << endl;
-                            char* original_rle = nullptr;
-                            descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
+                        if (original_rle) {
+                            // Si contiene la pista, verificamos recompresion-byte-a-byte
+                            if (contiene(original_rle, pista)) {
+                                // Recomprimos el texto obtenido y comparamos bytes
+                                char* recomp = nullptr;
+                                int tam_recomp = 0;
+                                compresion_rle(original_rle, recomp, tam_recomp); // tu función original
 
-                            if (original_rle) {
-                                cout << "      Texto RLE: [" << original_rle << "]" << endl;
-                                if (contiene(original_rle, pista)) {
-                                    cout << "\n✅ ENCONTRADO con RLE" << endl;
+                                bool igual_bytes = false;
+                                if (recomp != nullptr && tam_recomp == len_enc) {
+                                    igual_bytes = true;
+                                    for (int b = 0; b < tam_recomp; b++) {
+                                        if ((unsigned char)recomp[b] != (unsigned char)desencriptado[b]) {
+                                            igual_bytes = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (recomp) delete[] recomp;
+
+                                if (igual_bytes) {
+                                    cout << "\n✅ ENCONTRADO con RLE (verificado por recompresión)" << endl;
                                     cout << "Rotación: " << n << " bits" << endl;
                                     cout << "Clave XOR: 0x" << hex << K << dec << endl;
                                     cout << "\nTexto original (primeros 500 chars):" << endl;
-                                    for (int i = 0; i < 500 && original_rle[i] != '\0'; i++) {
-                                        cout << original_rle[i];
-                                    }
+                                    for (int i = 0; i < 500 && original_rle[i] != '\0'; i++) cout << original_rle[i];
                                     cout << endl;
                                     encontrado = true;
-                                    delete[] original_rle;
-                                    delete[] desencriptado;
-                                    break;
+                                } else {
+                                    // falso positivo; seguir buscando
                                 }
-                                delete[] original_rle;
-                            } else {
-                                cout << "      RLE falló." << endl;
+                            }
+                            delete[] original_rle;
+                        }
+
+                        delete[] desencriptado;
+                    }
+                }
+
+                // ===============================
+                // 2) Si no se encontró con RLE, intentar LZ78
+                // ===============================
+                if (!encontrado) {
+                    cout << "\n=== Intentando con LZ78 ===" << endl;
+                    for (int n = 1; n <= 7 && !encontrado; n++) {
+                        for (int K = 0; K <= 255 && !encontrado; K++) {
+
+                            char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                            // Validar formato LZ78: longitud comprimida también debe venir en bloques de 3
+                            if (len_enc % 3 != 0) {
+                                delete[] desencriptado;
+                                continue;
                             }
 
-                            // Probar LZ78 si RLE falló
-                            if (!encontrado) {
-                                cout << "    Probando LZ78..." << endl;
-                                char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+                            // Intentar descomprimir LZ78
+                            char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
 
-                                if (original_lz) {
-                                    cout << "      Texto LZ78: [" << original_lz << "]" << endl;
-                                    if (contiene(original_lz, pista)) {
-                                        cout << "\n✅ ENCONTRADO con LZ78" << endl;
+                            if (original_lz) {
+                                if (contiene(original_lz, pista)) {
+                                    // Recomprimir LZ78 y comparar bytes
+                                    unsigned char* recomp_lz = nullptr;
+                                    int tam_recomp_lz = 0;
+                                    compresion_lz78(original_lz, recomp_lz, tam_recomp_lz);
+
+                                    bool igual_bytes = false;
+                                    if (recomp_lz != nullptr && tam_recomp_lz == len_enc) {
+                                        igual_bytes = true;
+                                        for (int b = 0; b < tam_recomp_lz; b++) {
+                                            if ((unsigned char)recomp_lz[b] != (unsigned char)desencriptado[b]) {
+                                                igual_bytes = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (recomp_lz) delete[] recomp_lz;
+
+                                    if (igual_bytes) {
+                                        cout << "\n✅ ENCONTRADO con LZ78 (verificado por recompresión)" << endl;
                                         cout << "Rotación: " << n << " bits" << endl;
                                         cout << "Clave XOR: 0x" << hex << K << dec << endl;
                                         cout << "\nTexto original (primeros 500 chars):" << endl;
-                                        for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) {
-                                            cout << original_lz[i];
-                                        }
+                                        for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) cout << original_lz[i];
                                         cout << endl;
                                         encontrado = true;
-                                        delete[] original_lz;
-                                        delete[] desencriptado;
-                                        break;
+                                    } else {
+                                        // falso positivo
                                     }
-                                    delete[] original_lz;
-                                } else {
-                                    cout << "      LZ78 falló." << endl;
                                 }
+                                delete[] original_lz;
                             }
 
                             delete[] desencriptado;
-
-                        } catch (...) {
-                            cout << "    Error en combinación n=" << n << " K=" << K << endl;
-                            continue;
                         }
                     }
                 }
 
                 if (!encontrado) {
-                    cout << "❌ No se encontró ninguna combinación válida." << endl;
+                    cout << "\n❌ No se encontró ninguna combinación verificada." << endl;
                 }
 
+                // liberar recursos
                 delete[] encriptado;
                 delete[] pista_bruta;
                 delete[] pista;
                 break;
             }
+
+
             case 12: {
                 char nombreEnc[50], nombrePista[50];
                 cout << "Ingrese el nombre del archivo encriptado: ";
@@ -642,7 +903,7 @@ int main()
             }
 
             case 14: {
-                char original[] = "MISSISSIPPI";
+                char original[] = "aaaaabbbbbbccccccddddeeeeffffgggghhhh";
                 cout << "Texto original: [" << original << "]" << endl;
 
                 // Comprimir
@@ -691,6 +952,568 @@ int main()
                 delete[] comprimido;
                 break;
             }
+
+
+            case 16: {
+                char texto_original[] = "BABA BABA BABA";
+                cout << "Texto original: [" << texto_original << "]" << endl;
+
+                // 1. Comprimir en RLE (con tu versión)
+                char* comprimido = nullptr;
+                int tam_comp = 0;
+                compresion_rle(texto_original, comprimido, tam_comp);
+
+                cout << "Comprimido (" << tam_comp << " bytes)" << endl;
+
+                // 2. Encriptar con rotación + XOR
+                int n = 3;
+                unsigned char K = 0x5A;
+                char* encriptado = desencriptar(comprimido, tam_comp, n, K);
+                // 👆 usamos desencriptar porque es reversible (sirve para encriptar también)
+
+                // 3. Guardar archivo encriptado
+                guardar_archivo("EncriptadoPrueba.txt", encriptado, tam_comp);
+                cout << "Archivo encriptado generado: EncriptadoPrueba.txt" << endl;
+
+                // 4. Guardar pista
+                char pista[] = "BABA";
+                guardar_archivo("pistaPrueba.txt", pista, longitud_cadena(pista));
+                cout << "Archivo de pista generado: pistaPrueba.txt" << endl;
+
+                // Liberar memoria
+                delete[] comprimido;
+                delete[] encriptado;
+
+                break;
+            }
+
+            case 17: {
+                char nombreEnc[260], nombrePista[260];
+                cout << "Ingrese el nombre del archivo encriptado (ej: encriptado2.txt): ";
+                cin >> nombreEnc;
+                cout << "Ingrese el nombre del archivo de pista (ej: pista1.txt): ";
+                cin >> nombrePista;
+
+                // Leer archivos (binario)
+                int len_enc = 0, len_pista = 0;
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc); // debe leer binario y devolver len
+                char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+                if (!encriptado || !pista_bruta) {
+                    cout << "Error al leer archivos." << endl;
+                    if (encriptado) delete[] encriptado;
+                    if (pista_bruta) delete[] pista_bruta;
+                    break;
+                }
+
+                // Limpiar pista (eliminar \r \n)
+                char* pista = new char[len_pista + 1];
+                int pista_len = 0;
+                for (int i = 0; i < len_pista; i++) {
+                    if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                        pista[pista_len++] = pista_bruta[i];
+                    }
+                }
+                pista[pista_len] = '\0';
+
+                cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+                cout << "Pista: [" << pista << "]" << endl;
+
+                bool encontrado = false;
+
+                cout << "\n=== Intentando con LZ78 (solo LZ78) ===" << endl;
+
+                // mostrar primer bloque del archivo encriptado para inspección
+                cout << "HEAD encriptado (hex, 64 bytes max): ";
+                for (int i = 0; i < len_enc && i < 64; i++) printf("%02X ", (unsigned char)encriptado[i]);
+                cout << endl;
+
+                // bucle de búsqueda (rotación n de 1..7, clave K de 0..255)
+                for (int n = 1; n <= 7 && !encontrado; n++) {
+                    // opción: imprimir progreso cada cierta K grande para no saturar
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+
+                        // Desencriptar binario: desencriptar_bin debe devolver char* con len_enc bytes (binarios)
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+                        if (!desencriptado) continue;
+
+                        // DEBUG rápido: imprime los primeros 12 bytes del resultado desencriptado
+                        if (K % 64 == 0) {
+                            cout << "n=" << n << " K=0x" << hex << K << dec << " -> HEAD desencriptado: ";
+                            for (int i = 0; i < len_enc && i < 24; i++) printf("%02X ", (unsigned char)desencriptado[i]);
+                            cout << endl;
+                        }
+
+                        // Validar formato LZ78: tamaño debe ser múltiplo de 3
+                        if (len_enc % 3 != 0) {
+                            delete[] desencriptado;
+                            continue;
+                        }
+
+                        // Intentar descomprimir LZ78
+                        char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+
+                        if (original_lz) {
+                            // si contiene la pista, verificamos recompresión-byte-a-byte
+                            if (contiene(original_lz, pista)) {
+                                // Recomprimir LZ78 y comparar bytes
+                                unsigned char* recomp_lz = nullptr;
+                                int tam_recomp_lz = 0;
+                                compresion_lz78(original_lz, recomp_lz, tam_recomp_lz);
+
+                                bool igual_bytes = false;
+                                if (recomp_lz != nullptr && tam_recomp_lz == len_enc) {
+                                    igual_bytes = true;
+                                    for (int b = 0; b < tam_recomp_lz; b++) {
+                                        if ((unsigned char)recomp_lz[b] != (unsigned char)desencriptado[b]) {
+                                            igual_bytes = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (recomp_lz) delete[] recomp_lz;
+
+                                if (igual_bytes) {
+                                    cout << "\n✅ ENCONTRADO con LZ78 (verificado por recompresión)" << endl;
+                                    cout << "Rotación: " << n << " bits" << endl;
+                                    cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                    cout << "\nTexto original (primeros 500 chars):" << endl;
+                                    for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) cout << original_lz[i];
+                                    cout << endl;
+                                    encontrado = true;
+                                } else {
+                                    // falso positivo; continuar búsqueda
+                                }
+                            }
+                            delete[] original_lz;
+                        }
+
+                        delete[] desencriptado;
+                    }
+                }
+
+                if (!encontrado) {
+                    cout << "\n❌ No se encontró ninguna combinación verificada (LZ78)." << endl;
+                }
+
+                // liberar recursos
+                delete[] encriptado;
+                delete[] pista_bruta;
+                delete[] pista;
+                break;
+            }
+            case 18: {
+                char nombreEnc[] = "Encriptado4.txt";
+                char nombrePista[] = "pista4.txt";
+
+                // Leer archivos
+                int len_enc = 0, len_pista = 0;
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+                char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+                if (!encriptado || !pista_bruta) {
+                    cout << "Error al leer archivos." << endl;
+                    break;
+                }
+
+                // Limpiar pista
+                char* pista = new char[len_pista + 1];
+                int pista_len = 0;
+                for (int i = 0; i < len_pista; i++) {
+                    if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                        pista[pista_len++] = pista_bruta[i];
+                    }
+                }
+                pista[pista_len] = '\0';
+
+                cout << "Archivo: " << len_enc << " bytes" << endl;
+                cout << "Pista: [" << pista << "]" << endl;
+
+                // Probar SOLO con LZ78 y parámetros conocidos (n=3, K=0x40)
+                int n = 3;
+                unsigned char K = 0x40;
+
+                cout << "Probando LZ78 con n=" << n << ", K=0x" << hex << (int)K << dec << "..." << endl;
+
+                char* desencriptado = desencriptar_bin(encriptado, len_enc, n, K);
+                char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+
+                if (original_lz) {
+                    cout << "Texto descomprimido (primeros 200 chars):" << endl;
+                    for (int i = 0; i < 200 && original_lz[i] != '\0'; i++) {
+                        cout << original_lz[i];
+                    }
+                    cout << endl;
+
+                    if (contiene(original_lz, pista)) {
+                        cout << "\n✅ ¡ÉXITO! LZ78 funcionó con los parámetros correctos." << endl;
+                    } else {
+                        cout << "\n❌ La pista NO se encontró en el texto descomprimido." << endl;
+                    }
+                    delete[] original_lz;
+                } else {
+                    cout << "\n❌ descompresion_lz78 devolvió nullptr." << endl;
+                }
+
+                delete[] desencriptado;
+                delete[] encriptado;
+                delete[] pista_bruta;
+                delete[] pista;
+                break;
+            }
+
+            case 19: {//funciona a parte lz78
+                char nombreEnc[50], nombrePista[50];
+                cout << "Ingrese el nombre del archivo encriptado (ej: Encriptado2.txt): ";
+                cin >> nombreEnc;
+                cout << "Ingrese el nombre del archivo de pista (ej: pista2.txt): ";
+                cin >> nombrePista;
+
+                int len_enc = 0, len_pista = 0;
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+                char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+                if (!encriptado || !pista_bruta) {
+                    cout << "Error al leer archivos." << endl;
+                    if (encriptado) delete[] encriptado;
+                    if (pista_bruta) delete[] pista_bruta;
+                    break;
+                }
+
+                // Limpiar pista
+                char* pista = new char[len_pista + 1];
+                int pista_len = 0;
+                for (int i = 0; i < len_pista; i++) {
+                    if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                        pista[pista_len++] = pista_bruta[i];
+                    }
+                }
+                pista[pista_len] = '\0';
+
+                cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+                cout << "Pista: [" << pista << "]" << endl;
+
+                bool encontrado = false;
+
+                cout << "\n=== Intentando con LZ78 (solo LZ78) ===" << endl;
+
+                for (int n = 1; n <= 7 && !encontrado; n++) {
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                        if (len_enc % 3 != 0) {
+                            delete[] desencriptado;
+                            continue;
+                        }
+
+                        // 🔎 DEBUG: mostrar primeros 10 bloques
+                        cout << "\nn=" << n << " K=0x" << hex << K << dec << " -> Bloques:" << endl;
+                        for (int i = 0; i < len_enc && i < 30; i += 3) {
+                            int idx = (desencriptado[i] << 8) | (unsigned char)desencriptado[i + 1];
+                            unsigned char c = (unsigned char)desencriptado[i + 2];
+                            cout << "(" << idx << ",'" << (isprint(c) ? (char)c : '.') << "') ";
+                        }
+                        cout << endl;
+
+                        // Intentar descompresión
+                        char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+
+                        if (original_lz) {
+                            if (contiene(original_lz, pista)) {
+                                cout << "\n✅ ENCONTRADO con LZ78" << endl;
+                                cout << "Rotación: " << n << " bits" << endl;
+                                cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                cout << "\nTexto original (primeros 500 chars):" << endl;
+                                for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) cout << original_lz[i];
+                                cout << endl;
+                                encontrado = true;
+                            }
+                            delete[] original_lz;
+                        }
+
+                        delete[] desencriptado;
+                    }
+                }
+
+                if (!encontrado) {
+                    cout << "\n❌ No se encontró ninguna combinación verificada (LZ78)." << endl;
+                }
+
+                delete[] encriptado;
+                delete[] pista_bruta;
+                delete[] pista;
+                break;
+            }
+            case 20: {
+                char nombreEnc[50], nombrePista[50];
+                cout << "Ingrese el nombre del archivo encriptado (ej: Encriptado1.txt): ";
+                cin >> nombreEnc;
+                cout << "Ingrese el nombre del archivo de pista (ej: pista1.txt): ";
+                cin >> nombrePista;
+
+                // Leer archivos (binario)
+                int len_enc = 0, len_pista = 0;
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+                char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+                if (!encriptado || !pista_bruta) {
+                    cout << "Error al leer archivos." << endl;
+                    if (encriptado) delete[] encriptado;
+                    if (pista_bruta) delete[] pista_bruta;
+                    break;
+                }
+
+                // Limpiar pista (eliminar \r \n)
+                char* pista = new char[len_pista + 1];
+                int pista_len = 0;
+                for (int i = 0; i < len_pista; i++) {
+                    if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                        pista[pista_len++] = pista_bruta[i];
+                    }
+                }
+                pista[pista_len] = '\0';
+
+                cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+                cout << "Pista: [" << pista << "]" << endl;
+
+                bool encontrado = false;
+
+                // ===============================
+                // Intentar con RLE
+                // ===============================
+                cout << "\n=== Intentando con RLE ===" << endl;
+                for (int n = 1; n <= 7 && !encontrado; n++) {
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                        // Validación rápida
+                        if (len_enc % 2 != 0) {
+                            delete[] desencriptado;
+                            continue;
+                        }
+
+                        char* original_rle = nullptr;
+                        descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
+
+                        if (original_rle) {
+                            if (contiene(original_rle, pista)) {
+                                // Recomprueba
+                                char* recomp = nullptr;
+                                int tam_recomp = 0;
+                                compresion_rle(original_rle, recomp, tam_recomp);
+
+                                bool igual_bytes = false;
+                                if (recomp != nullptr && tam_recomp == len_enc) {
+                                    igual_bytes = true;
+                                    for (int b = 0; b < tam_recomp; b++) {
+                                        if ((unsigned char)recomp[b] != (unsigned char)desencriptado[b]) {
+                                            igual_bytes = false;
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (recomp) delete[] recomp;
+
+                                if (igual_bytes) {
+                                    cout << "\n✅ ENCONTRADO con RLE" << endl;
+                                    cout << "Rotación: " << n << " bits" << endl;
+                                    cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                    cout << "Texto original (primeros 500 chars):" << endl;
+                                    for (int i = 0; i < 500 && original_rle[i] != '\0'; i++) cout << original_rle[i];
+                                    cout << endl;
+                                    encontrado = true;
+                                }
+                            }
+                            delete[] original_rle;
+
+
+
+
+                        }
+                        delete[] desencriptado;
+                    }
+                }
+
+                // ===============================
+                // Intentar con LZ78
+                // ===============================
+                if (!encontrado) {
+                    cout << "\n=== Intentando con LZ78 ===" << endl;
+                    for (int n = 1; n <= 7 && !encontrado; n++) {
+                        for (int K = 0; K <= 255 && !encontrado; K++) {
+
+                            char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                            if (len_enc % 3 != 0) {
+                                delete[] desencriptado;
+                                continue;
+                            }
+
+                            // Debug: ver primeros bytes en hex
+                            cout << "n=" << n << " K=0x" << hex << K << dec << " -> HEAD desencriptado: ";
+                            for (int i = 0; i < 24 && i < len_enc; i++) {
+                                printf("%02X ", (unsigned char)desencriptado[i]);
+                            }
+                            cout << endl;
+
+                            char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+
+                            if (original_lz) {
+                                if (contiene(original_lz, pista)) {
+                                    // Recomprueba
+                                    unsigned char* recomp_lz = nullptr;
+                                    int tam_recomp_lz = 0;
+                                    compresion_lz78(original_lz, recomp_lz, tam_recomp_lz);
+
+                                    bool igual_bytes = false;
+                                    if (recomp_lz != nullptr && tam_recomp_lz == len_enc) {
+                                        igual_bytes = true;
+                                        for (int b = 0; b < tam_recomp_lz; b++) {
+                                            if ((unsigned char)recomp_lz[b] != (unsigned char)desencriptado[b]) {
+                                                igual_bytes = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if (recomp_lz) delete[] recomp_lz;
+
+                                    if (igual_bytes) {
+                                        cout << "\n✅ ENCONTRADO con LZ78" << endl;
+                                        cout << "Rotación: " << n << " bits" << endl;
+                                        cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                        cout << "Texto original (primeros 500 chars):" << endl;
+                                        for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) cout << original_lz[i];
+                                        cout << endl;
+                                        encontrado = true;
+                                    }
+                                }
+                                delete[] original_lz;
+                            }
+                            delete[] desencriptado;
+                        }
+                    }
+                }
+
+                if (!encontrado) {
+                    cout << "\n❌ No se encontró ninguna combinación (RLE o LZ78)." << endl;
+                }
+
+                delete[] encriptado;
+                delete[] pista_bruta;
+                delete[] pista;
+                break;
+            }
+            case 21: {
+                char nombreEnc[50], nombrePista[50];
+                cout << "Ingrese el nombre del archivo encriptado (ej: Encriptado1.txt): ";
+                cin >> nombreEnc;
+                cout << "Ingrese el nombre del archivo de pista (ej: pista1.txt): ";
+                cin >> nombrePista;
+
+                bool encontrado = false;
+
+                // ===============================
+                // INTENTAR CON RLE PRIMERO
+                // ===============================
+                cout << "\n=== Intentando con RLE ===" << endl;
+
+                int len_enc = 0, len_pista = 0;
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+                char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+                if (!encriptado || !pista_bruta) {
+                    cout << "Error al leer archivos." << endl;
+                    if (encriptado) delete[] encriptado;
+                    if (pista_bruta) delete[] pista_bruta;
+                    break;
+                }
+
+                // Limpiar pista
+                char* pista = new char[len_pista + 1];
+                int pista_len = 0;
+                for (int i = 0; i < len_pista; i++) {
+                    if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                        pista[pista_len++] = pista_bruta[i];
+                    }
+                }
+                pista[pista_len] = '\0';
+
+                cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+                cout << "Pista: [" << pista << "]" << endl;
+
+                // Buscar con RLE
+                for (int n = 1; n <= 7 && !encontrado; n++) {
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                        if (len_enc % 2 != 0) {
+                            delete[] desencriptado;
+                            continue;
+                        }
+
+                        char* original_rle = nullptr;
+                        descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
+
+                        if (original_rle && contiene(original_rle, pista)) {
+                            // Verificar recompresión
+                            char* recomp = nullptr;
+                            int tam_recomp = 0;
+                            compresion_rle(original_rle, recomp, tam_recomp);
+
+                            bool igual_bytes = false;
+                            if (recomp && tam_recomp == len_enc) {
+                                igual_bytes = true;
+                                for (int b = 0; b < tam_recomp; b++) {
+                                    if ((unsigned char)recomp[b] != (unsigned char)desencriptado[b]) {
+                                        igual_bytes = false;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (recomp) delete[] recomp;
+
+                            if (igual_bytes) {
+                                cout << "\n✅ ENCONTRADO con RLE" << endl;
+                                cout << "Rotación: " << n << " bits" << endl;
+                                cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                cout << "Texto original (primeros 500 chars):" << endl;
+                                for (int i = 0; i < 500 && original_rle[i] != '\0'; i++) cout << original_rle[i];
+                                cout << endl;
+                                encontrado = true;
+                            }
+                        }
+
+                        if (original_rle) delete[] original_rle;
+                        delete[] desencriptado;
+                    }
+                }
+
+                // Limpiar memoria de RLE
+                delete[] encriptado;
+                delete[] pista_bruta;
+                delete[] pista;
+
+                // ===============================
+                // SI RLE NO FUNCIONA, LLAMAR FUNCIÓN LZ78 LIMPIA
+                // ===============================
+                if (!encontrado) {
+                    cout << "\n--- RLE no funcionó, intentando LZ78 desde cero ---" << endl;
+                    encontrado = buscar_lz78_limpio(nombreEnc, nombrePista);
+                }
+
+                if (!encontrado) {
+                    cout << "\n❌ No se encontró ninguna combinación (RLE o LZ78)." << endl;
+                }
+
+                break;
+            }
+
         default:
     {
 
@@ -706,7 +1529,7 @@ int main()
 
     return 0;
 }
-
+*/
 
 void convertir_num_atexto(int numero, char resultado[]){
     int i = 0;
@@ -1114,3 +1937,72 @@ char* desencriptar_bin(char* datos, int len, int n, unsigned char K) {
      salida[len] = '\0';
     return salida;
 }
+
+bool buscar_lz78_limpio(const char* nombreEnc, const char* nombrePista) {
+    int len_enc = 0, len_pista = 0;
+    char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
+    char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
+    if (!encriptado || !pista_bruta) {
+        if (encriptado) delete[] encriptado;
+        if (pista_bruta) delete[] pista_bruta;
+        return false;
+    }
+
+    // Limpiar pista
+    char* pista = new char[len_pista + 1];
+    int pista_len = 0;
+    for (int i = 0; i < len_pista; i++) {
+        if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+            pista[pista_len++] = pista_bruta[i];
+        }
+    }
+    pista[pista_len] = '\0';
+
+    cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+    cout << "Pista: [" << pista << "]" << endl;
+
+    bool encontrado = false;
+    cout << "\n=== Intentando con LZ78 (función limpia) ===" << endl;
+
+    for (int n = 1; n <= 7 && !encontrado; n++) {
+        for (int K = 0; K <= 255 && !encontrado; K++) {
+            char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+            // DEBUG: mostrar primeros 10 bloques (opcional, puedes comentar)
+            if (n == 3 && K >= 85 && K <= 95) {
+                cout << "n=" << n << " K=0x" << hex << K << dec << " -> Bloques: ";
+                for (int i = 0; i < len_enc && i < 30; i += 3) {
+                    int idx = (desencriptado[i] << 8) | (unsigned char)desencriptado[i + 1];
+                    unsigned char c = (unsigned char)desencriptado[i + 2];
+                    cout << "(" << idx << ",'" << (isprint(c) ? (char)c : '.') << "') ";
+                }
+                cout << endl;
+            }
+
+            // Intentar descompresión
+            char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+
+            if (original_lz && contiene(original_lz, pista)) {
+                cout << "\n✅ ENCONTRADO con LZ78" << endl;
+                cout << "Rotación: " << n << " bits" << endl;
+                cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                cout << "\nTexto original (primeros 500 chars):" << endl;
+                for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) cout << original_lz[i];
+                cout << endl;
+                encontrado = true;
+            }
+
+            if (original_lz) delete[] original_lz;
+            delete[] desencriptado;
+        }
+    }
+
+    // Limpiar memoria
+    delete[] encriptado;
+    delete[] pista_bruta;
+    delete[] pista;
+
+    return encontrado;
+}
+
