@@ -71,11 +71,11 @@ int main() {
             for (int n_rot = 1; n_rot <= 7 && !encontrado; n_rot++) {
                 for (int K = 0; K <= 255 && !encontrado; K++) {
                     char* desencriptado = desencriptar_bin(encriptado, len_enc, n_rot, (unsigned char)K);
-                    if (len_enc % 3 != 0) {
+                    /*if (len_enc % 3 != 0) {
                         delete[] desencriptado;
                         continue;
                     }
-
+*/
                     char* original = nullptr;
                     descompresion_rle((unsigned char*)desencriptado, len_enc, original);
                     if (original && contiene(original, pista)) {
@@ -95,10 +95,10 @@ int main() {
                 for (int n_rot = 1; n_rot <= 7 && !encontrado; n_rot++) {
                     for (int K = 0; K <= 255 && !encontrado; K++) {
                         char* desencriptado = desencriptar_bin(encriptado, len_enc, n_rot, (unsigned char)K);
-                        if (len_enc % 3 != 0) {
-                            delete[] desencriptado;
-                            continue;
-                        }
+                        //if (len_enc % 3 != 0) {
+                            //delete[] desencriptado;
+                            //continue;
+                        //}
 
                         char* original = descompresion_lz78((unsigned char*)desencriptado, len_enc);
                         if (original && contiene(original, pista)) {
@@ -199,7 +199,7 @@ int main() {
                     if (recomp) delete[] recomp;
 
                     if (igual_bytes) {
-                        cout << "\n✅ ENCONTRADO con RLE" << endl;
+                        cout << "\n ENCONTRADO con RLE" << endl;
                         cout << "Rotación: " << n << " bits" << endl;
                         cout << "Clave XOR: 0x" << hex << K << dec << endl;
                         cout << "Texto original (primeros 500 chars):" << endl;
