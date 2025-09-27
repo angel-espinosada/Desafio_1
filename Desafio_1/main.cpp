@@ -653,22 +653,11 @@ bool buscar_lz78_limpio(const char* nombreEnc, const char* nombrePista) {
     cout << "Pista: [" << pista << "]" << endl;
 
     bool encontrado = false;
-    cout << "\n=== Intentando con LZ78 (función limpia) ===" << endl;
+    cout << "\n=== Intentando con LZ78 (funcion limpia) ===" << endl;
 
     for (int n = 1; n <= 7 && !encontrado; n++) {
         for (int K = 0; K <= 255 && !encontrado; K++) {
             char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
-
-            // DEBUG: mostrar primeros 10 bloques (opcional, puedes comentar)
-            if (n == 3 && K >= 85 && K <= 95) {
-                cout << "n=" << n << " K=0x" << hex << K << dec << " -> Bloques: ";
-                for (int i = 0; i < len_enc && i < 30; i += 3) {
-                    int idx = (desencriptado[i] << 8) | (unsigned char)desencriptado[i + 1];
-                    unsigned char c = (unsigned char)desencriptado[i + 2];
-                    cout << "(" << idx << ",'" << (isprint(c) ? (char)c : '.') << "') ";
-                }
-                cout << endl;
-            }
 
             // Intentar descompresión
             char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
