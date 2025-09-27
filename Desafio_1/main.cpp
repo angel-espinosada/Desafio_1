@@ -31,7 +31,7 @@ int main()
         cout<<"Seleccione una opcion"<<endl;
         cout<<"1- Encriptar"<<endl;
         cout<<"2- Desencriptar"<<endl;
-        cout<<"3- Comprimir"<<endl;
+        cout<<"3- Comprimir en RLE"<<endl;
         cout<<"4-Descomprimir"<<endl;
         cout<<"5-comprimir lz78 "<<endl;
         cout<<"6-Leyendoo texto "<<endl;
@@ -39,7 +39,10 @@ int main()
         cout<<"8_totaciones"<<endl;
         cout<<"9_xor"<<endl;
         cout<<"10_xor"<<endl;
+        cout<<"13 prueba RLE"<<endl;
+        cout<<"14 prueba lz78"<<endl;
         cout<<"0- para salir"<<endl;
+
         cin>>opcion;
         switch (opcion) {
         case 1:{
@@ -352,72 +355,124 @@ int main()
 
                 // Leer archivos
                 int len_enc, len_pista;
-                char* encriptado = leer_archivo_bn(nombreEnc, len_enc); // ← debe devolver longitud
+                char* encriptado = leer_archivo_bn(nombreEnc, len_enc);
                 char* pista_bruta = leer_archivo_bn(nombrePista, len_pista);
+
                 if (!encriptado || !pista_bruta) {
                     cout << "Error al leer archivos." << endl;
+                    if (encriptado) delete[] encriptado;
+                    if (pista_bruta) delete[] pista_bruta;
                     break;
                 }
 
-                // Limpiar pista (eliminar '\n' si existe)
-                char* pista = pista_bruta;
-                if (len_pista > 0 && pista[len_pista - 1] == '\n') {
-                    pista[len_pista - 1] = '\0';
-                } else {
-                    pista[len_pista] = '\0';
+                // Limpiar pista
+                char* pista = new char[len_pista + 1];
+                int pista_len = 0;
+                for (int i = 0; i < len_pista; i++) {
+                    if (pista_bruta[i] != '\n' && pista_bruta[i] != '\r') {
+                        pista[pista_len++] = pista_bruta[i];
+                    }
+                }
+                pista[pista_len] = '\0';
+
+                cout << "Archivo encriptado: " << len_enc << " bytes" << endl;
+                cout << "Pista: [" << pista << "]" << endl;
+
+                // VALIDACIÓN: debe ser múltiplo de 3
+                if (len_enc % 3 != 0) {
+                    cout << "ERROR: Archivo no es múltiplo de 3, no puede ser RLE/LZ78" << endl;
+                    delete[] encriptado;
+                    delete[] pista_bruta;
+                    delete[] pista;
+                    break;
                 }
 
-                cout << "Buscando... (pista: [" << pista << "])" << endl;
-
+                cout << "Buscando combinación correcta..." << endl;
                 bool encontrado = false;
-                for (int n = 1; n <= 7 && !encontrado; n++) {
-                    for (int K = 0; K <= 255 && !encontrado; K++) {
-                        // Desencriptar
-                        char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
 
-                        // Validar: longitud debe ser múltiplo de 3
-                        if (len_enc % 3 != 0) {
+                // Buscar combinación correcta
+                for (int n = 1; n <= 7 && !encontrado; n++) {
+                    cout << "Probando rotación " << n << "..." << endl;
+
+                    for (int K = 0; K <= 255 && !encontrado; K++) {
+                        if (K % 50 == 0) {
+                            cout << "  Clave " << K << "/255" << endl;
+                        }
+
+                        try {
+                            // Desencriptar
+                            cout << "    Desencriptando con n=" << n << ", K=0x" << hex << K << dec << "..." << endl;
+                            char* desencriptado = desencriptar_bin(encriptado, len_enc, n, (unsigned char)K);
+
+                            // Probar RLE
+                            cout << "    Probando RLE..." << endl;
+                            char* original_rle = nullptr;
+                            descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
+
+                            if (original_rle) {
+                                cout << "      Texto RLE: [" << original_rle << "]" << endl;
+                                if (contiene(original_rle, pista)) {
+                                    cout << "\n✅ ENCONTRADO con RLE" << endl;
+                                    cout << "Rotación: " << n << " bits" << endl;
+                                    cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                    cout << "\nTexto original (primeros 500 chars):" << endl;
+                                    for (int i = 0; i < 500 && original_rle[i] != '\0'; i++) {
+                                        cout << original_rle[i];
+                                    }
+                                    cout << endl;
+                                    encontrado = true;
+                                    delete[] original_rle;
+                                    delete[] desencriptado;
+                                    break;
+                                }
+                                delete[] original_rle;
+                            } else {
+                                cout << "      RLE falló." << endl;
+                            }
+
+                            // Probar LZ78 si RLE falló
+                            if (!encontrado) {
+                                cout << "    Probando LZ78..." << endl;
+                                char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
+
+                                if (original_lz) {
+                                    cout << "      Texto LZ78: [" << original_lz << "]" << endl;
+                                    if (contiene(original_lz, pista)) {
+                                        cout << "\n✅ ENCONTRADO con LZ78" << endl;
+                                        cout << "Rotación: " << n << " bits" << endl;
+                                        cout << "Clave XOR: 0x" << hex << K << dec << endl;
+                                        cout << "\nTexto original (primeros 500 chars):" << endl;
+                                        for (int i = 0; i < 500 && original_lz[i] != '\0'; i++) {
+                                            cout << original_lz[i];
+                                        }
+                                        cout << endl;
+                                        encontrado = true;
+                                        delete[] original_lz;
+                                        delete[] desencriptado;
+                                        break;
+                                    }
+                                    delete[] original_lz;
+                                } else {
+                                    cout << "      LZ78 falló." << endl;
+                                }
+                            }
+
                             delete[] desencriptado;
+
+                        } catch (...) {
+                            cout << "    Error en combinación n=" << n << " K=" << K << endl;
                             continue;
                         }
-
-                        // Probar RLE
-                        char* original_rle = nullptr;
-                        descompresion_rle((unsigned char*)desencriptado, len_enc, original_rle);
-                        if (original_rle && contiene(original_rle, pista)) {
-                            cout << "\nENCONTRADO con RLE" << endl;
-                            cout << "n = " << n << ", K = 0x" << hex << K << dec << endl;
-                            cout << "Mensaje original:\n" << original_rle << endl;
-                            encontrado = true;
-                            delete[] original_rle;
-                        } else if (original_rle) {
-                            delete[] original_rle;
-                        }
-
-                        // Probar LZ78 (solo si RLE no funcionó)
-                        if (!encontrado) {
-                            char* original_lz = descompresion_lz78((unsigned char*)desencriptado, len_enc);
-                            if (original_lz && contiene(original_lz, pista)) {
-                                cout << "\n ENCONTRADO con LZ78" << endl;
-                                cout << "n = " << n << ", K = 0x" << hex << K << dec << endl;
-                                cout << "Mensaje original:\n" << original_lz << endl;
-                                encontrado = true;
-                                delete[] original_lz;
-                            } else if (original_lz) {
-                                delete[] original_lz;
-                            }
-                        }
-
-                        delete[] desencriptado;
                     }
                 }
 
                 if (!encontrado) {
-                    cout << " No se encontró ninguna combinación válida." << endl;
+                    cout << "❌ No se encontró ninguna combinación válida." << endl;
                 }
 
                 delete[] encriptado;
                 delete[] pista_bruta;
+                delete[] pista;
                 break;
             }
             case 12: {
@@ -542,9 +597,103 @@ int main()
                 delete[] pista;
                 break;
             }
+            case 13: {
+                char original[] = "AAAAABBB";
+                cout << "Texto original: [" << original << "]" << endl;
 
+                // Comprimir
+                char* comprimido = nullptr;
+                int tam_comp = 0;
+                compresion_rle(original, comprimido, tam_comp);
+
+                cout << "Comprimido (" << tam_comp << " bytes): ";
+                for (int i = 0; i < tam_comp; i++) {
+                    printf("%02X ", (unsigned char)comprimido[i]);
+                }
+                cout << endl;
+
+                // Descomprimir
+                char* recuperado = nullptr;
+                descompresion_rle((unsigned char*)comprimido, tam_comp, recuperado);
+
+                if (recuperado) {
+                    cout << "Texto descomprimido: [" << recuperado << "]" << endl;
+
+                    // Comparar
+                    bool ok = true;
+                    for (int i = 0; original[i] != '\0' || recuperado[i] != '\0'; i++) {
+                        if (original[i] != recuperado[i]) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) {
+                        cout << "✅ RLE: ÉXITO" << endl;
+                    } else {
+                        cout << "❌ RLE: FALLÓ" << endl;
+                    }
+                    delete[] recuperado;
+                } else {
+                    cout << "❌ RLE: descompresión devolvió nullptr" << endl;
+                }
+
+                delete[] comprimido;
+                break;
+            }
+
+            case 14: {
+                char original[] = "MISSISSIPPI";
+                cout << "Texto original: [" << original << "]" << endl;
+
+                // Comprimir
+                unsigned char* comprimido = nullptr;
+                int tam_comp = 0;
+                compresion_lz78(original, comprimido, tam_comp);
+
+                cout << "Comprimido (" << tam_comp << " bytes): ";
+                for (int i = 0; i < tam_comp; i++) {
+                    printf("%02X ", comprimido[i]);
+                }
+                cout << endl;
+
+                // Mostrar bloques
+                cout << "Bloques LZ78: ";
+                for (int i = 0; i < tam_comp; i += 3) {
+                    int idx = (comprimido[i] << 8) | comprimido[i+1];
+                    char c = comprimido[i+2];
+                    cout << "(" << idx << ",'" << c << "') ";
+                }
+                cout << endl;
+
+                // Descomprimir
+                char* recuperado = descompresion_lz78(comprimido, tam_comp);
+                if (recuperado) {
+                    cout << "Texto descomprimido: [" << recuperado << "]" << endl;
+
+                    // Comparar
+                    bool ok = true;
+                    for (int i = 0; original[i] != '\0' || recuperado[i] != '\0'; i++) {
+                        if (original[i] != recuperado[i]) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) {
+                        cout << "✅ LZ78: ÉXITO" << endl;
+                    } else {
+                        cout << "❌ LZ78: FALLÓ" << endl;
+                    }
+                    delete[] recuperado;
+                } else {
+                    cout << "❌ LZ78: descompresión devolvió nullptr" << endl;
+                }
+
+                delete[] comprimido;
+                break;
+            }
         default:
     {
+
 
             if(opcion!=0)
                 cout<<"opcion no valida"<<endl;
@@ -633,37 +782,30 @@ void descompresion_rle(unsigned char *resultado, int tamano, char *&texto) {
         texto = new char[contado_texto + 1];
     }
     texto[contado_texto] = '\0';*/
-
     if (tamano % 3 != 0) {
         texto = nullptr;
         return;
     }
 
-    // Paso 1: calcular longitud total
-    int longitud_total = 0;
+    // Calcular longitud total
+    int total = 0;
     for (int i = 0; i < tamano; i += 3) {
-        unsigned char alto = resultado[i];
-        unsigned char bajo = resultado[i+1];
-        int contador = (alto << 8) | bajo;
-        longitud_total += contador;
+        int len = (resultado[i] << 8) | resultado[i+1];
+        total += len;
     }
 
-    // Paso 2: reservar memoria
-    texto = new char[longitud_total + 1];
-
-    // Paso 3: descomprimir
+    texto = new char[total + 1];
     int pos = 0;
     for (int i = 0; i < tamano; i += 3) {
-        unsigned char alto = resultado[i];
-        unsigned char bajo = resultado[i+1];
-        char caracter = resultado[i+2];
-        int contador = (alto << 8) | bajo;
-
-        for (int j = 0; j < contador; j++) {
-            texto[pos++] = caracter;
+        int len = (resultado[i] << 8) | resultado[i+1];
+        char c = resultado[i+2];
+        for (int j = 0; j < len; j++) {
+            texto[pos++] = c;
         }
     }
     texto[pos] = '\0';
+
+
 
 }
 
@@ -840,7 +982,7 @@ char* descompresion_lz78(unsigned char* datos, int tamano) {
 
         if (indice > 0) {
             for (int j = 0; j < prefijo_len; j++) {
-                nueva[j] = dict[indice][j];
+                nueva[j] = dict[indice][j];  // ← ya no -1
             }
         }
         nueva[prefijo_len] = c;
